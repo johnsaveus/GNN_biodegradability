@@ -12,6 +12,8 @@ Lib/
 Scripts/
 .gitattributes
 pyvenv.cfg
+Library/
+share/
 
 # Distribution / packaging
 .Python

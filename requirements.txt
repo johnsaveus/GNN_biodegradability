@@ -1,0 +1,4 @@
+rdkit==2023.09.5
+matplotlib==3.7.5
+pandas==2.0.3
+torch

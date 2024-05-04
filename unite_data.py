@@ -1,6 +1,5 @@
 from rdkit import Chem
 import pandas as pd
-import pickle
 
 def parse_sdf(sdf_path:str):
 
