@@ -1,8 +1,8 @@
-import torch
 from rdkit import Chem
 import pandas as pd
 from torch.utils.data import Dataset
 from torch_geometric.data import Data
+import numpy as np
 
 def one_of_k_encoding(x, allowable_set):
     if x not in allowable_set:
@@ -17,10 +17,9 @@ def one_of_k_encoding_unk(x, allowable_set):
         x = allowable_set[-1]
     return [x == s for s in allowable_set]
 
-
 def atom_features(atom):
    
-    atom_feats = one_of_k_encoding_unk(
+        atom_feats = np.array(one_of_k_encoding_unk(
        atom.GetSymbol(),
        [
         'Rh',
@@ -75,58 +74,79 @@ def atom_features(atom):
                 'other'
                 ]) + one_of_k_encoding(atom.GetTotalNumHs(),
                                            [0, 1, 2, 3, 4]) + \
-                    one_of_k_encoding(atom.GetDegree(), 
+                    one_of_k_encoding_unk(atom.GetDegree(), 
                                       [0, 1, 2, 3, 4]) + \
                     [atom.GetFormalCharge()] + \
-                    [atom.GetIsAromatic]
+                    [atom.GetIsAromatic()])
+        
+        return atom_feats
     
-    return torch.tensor(atom_feats)
- 
-
 def bond_features(bond):
-   
-   bt = bond.GetBondType()
-   bond_feats = [
-        bt == Chem.rdchem.BondType.SINGLE, bt == Chem.rdchem.BondType.DOUBLE,
-        bt == Chem.rdchem.BondType.TRIPLE, bt == Chem.rdchem.BondType.AROMATIC,
-        bond.GetIsConjugated(),
-        bond.IsInRing(),
-        bond.GetStereo()]
-   
-   return bond_feats
 
+    bt = bond.GetBondType()
+    bond_feats = np.array([
+    bt == Chem.rdchem.BondType.SINGLE, bt == Chem.rdchem.BondType.DOUBLE,
+    bt == Chem.rdchem.BondType.TRIPLE, bt == Chem.rdchem.BondType.AROMATIC,
+    bond.GetIsConjugated(),
+    bond.IsInRing(),
+    bond.GetStereo()])
 
-def nodes_and_adjacency(smile, y):
+    return bond_feats
+
+def featurize(smile):
 
     mol = Chem.MolFromSmiles(smile)
+    assert mol.GetNumAtoms() > 1
+    "More than one atom should be present"
 
-    node_features = [atom_features(atom) for atom in mol.GetAtoms()]
-    node_features = torch.stack(node_features).float()
+    node_features = np.asarray(
+        [atom_features(atom) for atom in mol.GetAtoms()], 
+        dtype = float
+    )
 
-    bond_features = [bond_features(bond) for bond in mol.GetBonds()]
-    bond_features = torch.stack(bond_features).float()
-    # Create Adjacency Matrix
-    ix1 , ix2 = [] , []
+    src , dest = [] , []
     for bond in mol.GetBonds():
         start, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-        ix1 += [start, end]
-        ix2 += [end, start]
-    adj_norm = torch.asarray([ix1, ix2], dtype = torch.int64) # Needs to be in COO Format
+        src += [start, end]
+        dest += [end, start]
+    edge_index = np.asarray([src, dest], dtype = int) # Needs to be in COO Format
 
-    return Data(x = node_features,
-                edge_index = adj_norm,
-                edge_attr = bond_features,
-                y = y)
+    features = []
+    for bond in mol.GetBonds():
+        features += 2 * [bond_features(bond)]
+    edge_features = np.asarray(features, dtype=float)
 
+    return Data(node_features = node_features,
+                edge_index = edge_index,
+                edge_attr = edge_features)
+    
 
 class MolecularDataset(Dataset):
 
     def __init__(self,
-                 smiles,
-                 Y):
-        
-        self.smiles = smiles
-        self.Y = Y
+                smiles,
+                y):
+         
+        super(MolecularDataset, self).__init__()
 
-    def split():
-        # Only for creation of validation and test
+    def _create(self):
+        pass
+    
+    def _get_target(self, target):
+        return np.asarray([target], dtype = int) 
+    
+smile = 'CCC'
+feats = featurize(smile)
+print(feats)
+# Only for creation of validation and test
+#df = pd.read_csv("data/smiles_rb.csv")
+#smiles = df['SMILES']
+#y = df['ReadyBiodegradability']
+#print(len(df))
+
+'''
+dataset = MolecularDataset(smiles, y)
+print(len(dataset.data))
+print(dataset.data)'''
+
+smiles = ['CCC']
