@@ -1,8 +1,9 @@
 from rdkit import Chem
 import pandas as pd
-from torch.utils.data import Dataset
-from torch_geometric.data import Data
-import numpy as np
+from torch_geometric.data import Data, Dataset
+import torch
+from tqdm import tqdm
+import os
 
 def one_of_k_encoding(x, allowable_set):
     if x not in allowable_set:
@@ -19,7 +20,7 @@ def one_of_k_encoding_unk(x, allowable_set):
 
 def atom_features(atom):
    
-        atom_feats = np.array(one_of_k_encoding_unk(
+        atom_feats = torch.tensor(one_of_k_encoding_unk(
        atom.GetSymbol(),
        [
         'Rh',
@@ -84,60 +85,77 @@ def atom_features(atom):
 def bond_features(bond):
 
     bt = bond.GetBondType()
-    bond_feats = np.array([
+    bond_feats = [
     bt == Chem.rdchem.BondType.SINGLE, bt == Chem.rdchem.BondType.DOUBLE,
     bt == Chem.rdchem.BondType.TRIPLE, bt == Chem.rdchem.BondType.AROMATIC,
     bond.GetIsConjugated(),
     bond.IsInRing(),
-    bond.GetStereo()])
+    bond.GetStereo()]
 
     return bond_feats
 
-def featurize(smile):
-
-    mol = Chem.MolFromSmiles(smile)
-    assert mol.GetNumAtoms() > 1
-    "More than one atom should be present"
-
-    node_features = np.asarray(
-        [atom_features(atom) for atom in mol.GetAtoms()], 
-        dtype = float
-    )
-
-    src , dest = [] , []
-    for bond in mol.GetBonds():
-        start, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-        src += [start, end]
-        dest += [end, start]
-    edge_index = np.asarray([src, dest], dtype = int) # Needs to be in COO Format
-
-    features = []
-    for bond in mol.GetBonds():
-        features += 2 * [bond_features(bond)]
-    edge_features = np.asarray(features, dtype=float)
-
-    return Data(node_features = node_features,
-                edge_index = edge_index,
-                edge_attr = edge_features)
-    
-
 class MolecularDataset(Dataset):
 
-    def __init__(self,
-                smiles,
-                y):
-         
+    def __init__(self):
         super(MolecularDataset, self).__init__()
 
-    def _create(self):
-        pass
+    def create(self, raw_path):
+        dataset = []
+        self.data = pd.read_csv(raw_path).reset_index()
+        for ix, mol in tqdm(self.data.iterrows(), total = self.data.shape[0]):
+            mol_obj = Chem.MolFromSmiles(mol['SMILES'])
+            if mol_obj is None or mol_obj.GetNumAtoms() <= 1:
+            # Skip this molecule and continue to the next
+                continue
+            x = self._get_node_features(mol_obj)
+
+            edge_index = self._get_adjacency(mol_obj)
+            edge_attr = self._get_edge_features(mol_obj)
+            label = self._get_label(mol['ReadyBiodegradability'])
+
+            data = Data(x =x, 
+                    edge_index = edge_index,
+                    edge_attr = edge_attr,
+                    y=label,
+                    smiles=mol["SMILES"])
+            
+            dataset.append(data)
+        torch.save(dataset, 'data/train.pt')
+                       
+    def _get_node_features(self, mol):
+
+        node_feat = torch.stack(
+        [atom_features(atom) for atom in mol.GetAtoms()])
+        return node_feat
     
-    def _get_target(self, target):
-        return np.asarray([target], dtype = int) 
+    def _get_adjacency(self, mol):
+
+        src , dest = [] , []
+        for bond in mol.GetBonds():
+            start, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+            src += [start, end]
+            dest += [end, start]
+        edge_index = torch.asarray([src, dest], dtype = int) # Needs to be in COO Format
+
+        return edge_index
     
-smile = 'CCC'
-feats = featurize(smile)
-print(feats)
+    def _get_edge_features(self, mol):
+
+        features = []
+        for bond in mol.GetBonds():
+            features += 2 * [bond_features(bond)]
+        edge_feat = torch.tensor(features, dtype=torch.float)
+
+        return edge_feat
+
+    def _get_label(self, label):
+        return torch.asarray([label], dtype = int)
+    
+    
+#dataset = MolecularDataset()
+#dataset.create('data/smiles_rb.csv')
+dataset = torch.load('data/train.pt')
+print(len(dataset))
 # Only for creation of validation and test
 #df = pd.read_csv("data/smiles_rb.csv")
 #smiles = df['SMILES']
@@ -148,5 +166,3 @@ print(feats)
 dataset = MolecularDataset(smiles, y)
 print(len(dataset.data))
 print(dataset.data)'''
-
-smiles = ['CCC']
