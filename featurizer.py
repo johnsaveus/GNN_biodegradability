@@ -112,12 +112,14 @@ class MolecularDataset(Dataset):
             edge_index = self._get_adjacency(mol_obj)
             edge_attr = self._get_edge_features(mol_obj)
             label = self._get_label(mol['ReadyBiodegradability'])
+            num_nodes = mol_obj.GetNumAtoms()
 
             data = Data(x =x, 
                     edge_index = edge_index,
                     edge_attr = edge_attr,
                     y=label,
-                    smiles=mol["SMILES"])
+                    smiles=mol["SMILES"],
+                    num_nodes = num_nodes)
             
             dataset.append(data)
         torch.save(dataset, 'data/train.pt')
@@ -155,7 +157,7 @@ class MolecularDataset(Dataset):
 #dataset = MolecularDataset()
 #dataset.create('data/smiles_rb.csv')
 dataset = torch.load('data/train.pt')
-print(len(dataset))
+print(dataset[1])
 # Only for creation of validation and test
 #df = pd.read_csv("data/smiles_rb.csv")
 #smiles = df['SMILES']
