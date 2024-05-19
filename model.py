@@ -1,6 +1,11 @@
 from torch import nn
 import torch
 
+class GraphAttention(GraphAttentionLayer):
+
+    def __init__(self):
+        
+
 
 
 class GraphAttentionLayer(nn.Module):
@@ -8,35 +13,55 @@ class GraphAttentionLayer(nn.Module):
 # Single attention head
 
     def __init__(self,
-                 input_dim,
-                 output_dim,
+                 input_feats,
+                 output_feats,
                  num_heads=1,
                  drop_prob=0.5,
-                 bias=False,
-                 concat_heads = False
+                 leaky_relu_slope=0.2,
+                 concat_heads = False,
+                 init_distrib = 'uniform'
                  ):
         
         super(GraphAttentionLayer, self).__init__()
 
-        self.bias = bias
         self.num_heads = num_heads
-        self.output_dim = output_dim
         self.concat_heads = concat_heads
-
-        self.leakyReLU = nn.LeakyReLU()
+        self.init_distrib = init_distrib
+        self.leakyrelu = nn.LeakyReLU(negative_slope=leaky_relu_slope)
         self.softmax = nn.Softmax(dim=-1) 
         self.dropout = nn.Dropout(p=drop_prob)
         # Transform node embeddings for self attention multiplication
         # Asume Averaging of attention heads
-        self.linear = nn.Linear(input_dim, num_heads * output_dim, bias = self.bias) 
-        nn.init.xavier_uniform_(self.linear.weight, gain=1.414)
-        if self.bias:
-            nn.init_zeros_(self.linear.bias)  
+        if concat_heads:
+            self.output_feats = output_feats
+            assert output_feats % num_heads == 0 
+            self.num_hidden = output_feats // num_heads
+        else:
+            self.n_hidden = output_feats
+
+        self.W = nn.Parameter(torch.zeros(size = (input_feats, self.num_hidden * num_heads)))
         # Attention Mechanism
         # Concatination of two nodes connected by an edge (2 * output_dim)
-        self.attention = nn.Parameter(torch.zeros(size= (2 * output_dim, 1)))
-        nn.init.xavier_uniform_(self.attention.data, gain=1.414)
+        self.attention = nn.Parameter(torch.zeros(size= (num_heads, 2 * self.num_hidden, 1)))
 
+        self._param_init()
+
+    def _param_init(self):
+
+        if self.init_distrib == 'uniform':
+            nn.init.xavier_uniform_(self.W)
+            nn.init.xavier_uniform_(self.attention)
+        elif self.init_distrib == 'normal':
+            nn.init.xavier_normal_(self.W)
+            nn.init.xavier_normal_(self.attention)
+        else:
+            raise ValueError(f"Invalid init_distrib value = {self.init_distrib} Select 'uniform' or 'normal'")
+        
+    def _calc_attention_scores(self):
+
+        src_scores = 
+        target_scores = 
+            
     def forward(self, graph):
 
         node_features, edge_index = graph
@@ -45,12 +70,14 @@ class GraphAttentionLayer(nn.Module):
         assert edge_index.shape[0] == 2, f'Adjacency Matrix needs to be in COO format'
 
         # Create W*h Matrix. Shape = (Input_dim, Num_heads, Output_Dim)
-        linear_projection = self.linear(node_features).view(-1, self.num_heads, self.output_dim)
+        linear_proj = torch.mm(node_features, self.W)
         # Dropout to projection
-        linear_projection = self.dropout(linear_projection)
+        linear_proj_drop = self.dropout(linear_proj)
         # Index every node and it's neighbor
-        src_projection = linear_projection[edge_index[0]]
-        target_projection = linear_projection[edge_index[1]]
+
+
+        #src_projection = linear_projection[edge_index[0]]
+        #target_projection = linear_projection[edge_index[1]]
         concat_projections = torch.cat([src_projection, target_projection], dim=-1)
         # Calculate attention_scores per node
         att_scores_raw = self.leakyReLU(torch.matmul(concat_projections, self.attention).squeeze(-1))
