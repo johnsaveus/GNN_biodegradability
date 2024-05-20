@@ -108,7 +108,6 @@ class MolecularDataset(Dataset):
             # Skip this molecule and continue to the next
                 continue
             x = self._get_node_features(mol_obj)
-
             edge_index = self._get_adjacency(mol_obj)
             edge_attr = self._get_edge_features(mol_obj)
             label = self._get_label(mol['ReadyBiodegradability'])
@@ -128,18 +127,24 @@ class MolecularDataset(Dataset):
 
         node_feat = torch.stack(
         [atom_features(atom) for atom in mol.GetAtoms()])
-        return node_feat
+        node_feats = torch.tensor(node_feat, dtype = torch.float32)
+        return node_feats
     
     def _get_adjacency(self, mol):
-
+        
         src , dest = [] , []
         for bond in mol.GetBonds():
             start, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
             src += [start, end]
             dest += [end, start]
-        edge_index = torch.asarray([src, dest], dtype = int) # Needs to be in COO Format
-
-        return edge_index
+        edge_index = torch.asarray([src, dest], dtype = torch.int) # Needs to be in COO Format
+        # Convert to dense
+        num_nodes = mol.GetNumAtoms()
+        vals = torch.ones(edge_index.shape[1], dtype = torch.float32)
+        sparse_adj = torch.sparse_coo_tensor(edge_index, vals, (num_nodes, num_nodes))
+        dense_adj = sparse_adj.to_dense()
+        bool_dense = dense_adj > 0
+        return bool_dense
     
     def _get_edge_features(self, mol):
 
@@ -154,10 +159,10 @@ class MolecularDataset(Dataset):
         return torch.asarray([label], dtype = int)
     
     
-#dataset = MolecularDataset()
-#dataset.create('data/smiles_rb.csv')
-dataset = torch.load('data/train.pt')
-print(dataset[1])
+dataset = MolecularDataset()
+dataset.create('data/smiles_rb.csv')
+#dataset = torch.load('data/train.pt')
+#print(dataset[1].edge_index)
 # Only for creation of validation and test
 #df = pd.read_csv("data/smiles_rb.csv")
 #smiles = df['SMILES']
