@@ -51,15 +51,14 @@ class GraphAttentionLayer(nn.Module):
         e_i_j = self.leakyrelu(Wh)
         return e_i_j
 
-    def forward(self, graph):
+    def forward(self, x, adj):
 
-        node_features, adj_matrix = graph
         #num_nodes = node_features.shape[0]
         #assert edge_index.shape[0] == 2, f'Adjacency Matrix needs to be in COO format'
         # Create W*h Matrix with heads.
         # (num_nodes , in_feats) * (in_feats, out_feats).  Shape = (Num_nodes, output_feats)
         # Multiplication without broadcasting
-        linear_proj = torch.mm(node_features, self.W)
+        linear_proj = torch.mm(x, self.W)
         # Dropout to projection
         linear_proj_drop = self.dropout(linear_proj)
         # Calculate e before normalizing. 
@@ -67,7 +66,7 @@ class GraphAttentionLayer(nn.Module):
         # Only the connected nodes contribute to attention
         # Init zero_vec with low values so it can be near zero when using softmax
         softmax_zero_vals = -9e15*torch.ones_like(e)
-        attention = torch.where(adj_matrix, e, softmax_zero_vals)
+        attention = torch.where(adj > 0 , e, softmax_zero_vals)
         attention = F.softmax(attention, dim=1)
         attention = self.dropout(attention)
         # Final multiplication for the input of the next layer.
@@ -78,11 +77,11 @@ class GraphAttentionLayer(nn.Module):
             return F.elu(h_out)
         else:
             return h_out
-
+'''
 dataset = torch.load('data/train.pt')
 graph = (dataset[0].x, dataset[0].edge_index)
 gat_layer = GraphAttentionLayer(60, 40)
 output = gat_layer(graph)
 print(output.shape)
 # Seems like it works
-
+'''
