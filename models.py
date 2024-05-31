@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from layers import GraphAttentionLayer
 from torch_geometric.nn.pool import global_add_pool
+from featurizer import MolecularDataset
 
 torch.manual_seed(42)
 class GraphAttention(nn.Module):
@@ -22,30 +23,38 @@ class GraphAttention(nn.Module):
         self.attention_layers = nn.ModuleList([
             GraphAttentionLayer(atom_feats if i == 0 else hidden_feats * num_heads, 
                                 hidden_feats, 
-                                drop_prob=drop_prob, 
-                                concat_heads=True) 
+                                drop_prob=drop_prob) 
             for i in range(num_layers)
         ])
 
     def forward(self, x, adj, batch):
-
+        #print(x.shape)
         x = F.dropout(x, self.drop_prob, training = self.training)
+        #print(x.shape)
         for attention_layer in self.attention_layers:
             x = torch.cat([attention_layer(x, adj) for _ in range(self.num_heads)], dim = 1)
             #print(x.shape)
         x = F.dropout(x, self.drop_prob, training = self.training)
+        #x = x.sum(dim=1) / x.shape[0]
         x = global_add_pool(x, batch)
         #print(x.shape)
-        x = self.fc1(x)
-        x = self.fc2(x)
-        #print(x)
         #print(x.shape)
-        x = torch.sigmoid(x)
-        print(x)
+       # print(x.shape)
+        x = self.fc1(x)
+       # print(x.shape)
+        #print(x.shape)
+        x = self.fc2(x)
+        #print(x.shape)
+       # print(x)
+        #x = x.squeeze(dim = -1)
+        #print(x.shape)
+        x = x.squeeze(dim = -1)
         return x
 
-dataset = torch.load('data/train.pt')
-data = dataset[0]
-graph = (data.x, data.edge_index, data.batch)
+'''
+dataset = MolecularDataset(root = 'data')
+dataset.load('data\processed\data.pt')
 gat_layer = GraphAttention(60, 40, 4)
-output = gat_layer(data.x, data.edge_index, data.batch)
+output = gat_layer(dataset[0].x, dataset[0].edge_index)
+print(output)
+'''

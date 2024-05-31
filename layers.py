@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from featurizer import MolecularDataset
 
 class GraphAttentionLayer(nn.Module):
 
@@ -9,18 +10,18 @@ class GraphAttentionLayer(nn.Module):
     def __init__(self,
                  in_feats,
                  out_feats,
-                 num_heads=1,
+                 #num_heads=1,
                  drop_prob=0.5,
                  leaky_relu_slope=0.2,
-                 concat_heads = False,
+                 #concat_heads = False,
                  init_distrib = 'uniform'
                  ):
         
         super(GraphAttentionLayer, self).__init__()
 
-        self.num_heads = num_heads
+        #self.num_heads = num_heads
         self.out_feats = out_feats
-        self.concat_heads = concat_heads
+        #self.concat_heads = concat_heads
         self.init_distrib = init_distrib
         self.leakyrelu = nn.LeakyReLU(negative_slope=leaky_relu_slope)
         self.dropout = nn.Dropout(p=drop_prob)
@@ -50,16 +51,28 @@ class GraphAttentionLayer(nn.Module):
         Wh = Wh_i + Wh_j.mT
         e_i_j = self.leakyrelu(Wh)
         return e_i_j
+    
+    def _convert_adj_to_dense(self, x, adj):
 
+        num_nodes = x.shape[0]
+        vals = torch.ones(adj.shape[1], dtype = torch.float32)
+        sparse_adj = torch.sparse_coo_tensor(adj, vals, (num_nodes, num_nodes))
+        dense_adj = sparse_adj.to_dense()
+        bool_dense = dense_adj > 0
+        return bool_dense
     def forward(self, x, adj):
 
+        #if adj.shape[0]!= x.shape[0] and adj.shape[1] != x.shape[1]:
+        adj = self._convert_adj_to_dense(x, adj)
         #num_nodes = node_features.shape[0]
         #assert edge_index.shape[0] == 2, f'Adjacency Matrix needs to be in COO format'
         # Create W*h Matrix with heads.
         # (num_nodes , in_feats) * (in_feats, out_feats).  Shape = (Num_nodes, output_feats)
         # Multiplication without broadcasting
+        #print(x.shape)
         linear_proj = torch.mm(x, self.W)
         # Dropout to projection
+        #print(linear_proj.shape)
         linear_proj_drop = self.dropout(linear_proj)
         # Calculate e before normalizing. 
         e = self._calc_attention_scores(linear_proj_drop)
@@ -69,19 +82,20 @@ class GraphAttentionLayer(nn.Module):
         attention = torch.where(adj > 0 , e, softmax_zero_vals)
         attention = F.softmax(attention, dim=1)
         attention = self.dropout(attention)
+        #print(attention.shape)
         # Final multiplication for the input of the next layer.
         # Reminder: 1 head
         h_out = torch.matmul(attention, linear_proj)
 
-        if self.concat_heads:
-            return F.elu(h_out)
-        else:
-            return h_out
-'''
-dataset = torch.load('data/train.pt')
-graph = (dataset[0].x, dataset[0].edge_index)
-gat_layer = GraphAttentionLayer(60, 40)
-output = gat_layer(graph)
-print(output.shape)
+        return h_out
+       # if self.concat_heads:
+       #     return F.elu(h_out)
+       # else:
+       #     return h_out
+
+#dataset = MolecularDataset(root = 'data')
+#dataset.load('data\processed\data.pt')
+#gat_layer = GraphAttentionLayer(60, 40)
+#output = gat_layer(dataset[0].x, dataset[0].edge_index)
+#print(output.shape)
 # Seems like it works
-'''

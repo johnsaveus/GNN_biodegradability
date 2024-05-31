@@ -134,14 +134,14 @@ class MolecularDataset(InMemoryDataset):
 
             data = Data(
             x = x,
-            edge_index = edge_index,
+            edge_index = bool_dense,
             fingerprint = fingerprint,
             y = label,
             smiles = mol['SMILES'],
             num_nodes = num_nodes)
             
             dataset.append(data)
-            
+
         processed_dir = os.path.join(self.root, 'processed')
         if not os.path.exists(processed_dir):
             os.makedirs(processed_dir)
@@ -169,7 +169,7 @@ class MolecularDataset(InMemoryDataset):
         sparse_adj = torch.sparse_coo_tensor(edge_index, vals, (num_nodes, num_nodes))
         dense_adj = sparse_adj.to_dense()
         bool_dense = dense_adj > 0
-        return edge_index, bool_dense
+        return edge_index, edge_index
     
     def _get_edge_features(self, mol):
 
@@ -182,7 +182,7 @@ class MolecularDataset(InMemoryDataset):
     
     def _get_fingerprint(self, mol):
 
-        fingerprint = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+        fingerprint = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=100)
         fingerprint_tensor = torch.tensor(list(fingerprint), dtype=torch.float32)
 
         return fingerprint_tensor
@@ -190,9 +190,9 @@ class MolecularDataset(InMemoryDataset):
     def _get_label(self, label):
         return torch.asarray([label], dtype = int)
     
-dataset = MolecularDataset(root = 'data')
-dataset.load('data\processed\data.pt')
-print(dataset[0])
+#dataset = MolecularDataset(root = 'data')
+#dataset.load('data\processed\data.pt')
+#print(dataset[0])
 #dataset.load()
 #print(dataset[0])
 #dataset.process()
