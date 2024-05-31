@@ -1,9 +1,11 @@
 from rdkit import Chem
 import pandas as pd
-from torch_geometric.data import Data, Dataset
+#from torch.utils.data import Dataset
+from torch_geometric.data import Data, InMemoryDataset
 import torch
 from tqdm import tqdm
 import os
+from rdkit.Chem import AllChem
 
 def one_of_k_encoding(x, allowable_set):
     if x not in allowable_set:
@@ -94,13 +96,29 @@ def bond_features(bond):
 
     return bond_feats
 
-class MolecularDataset(Dataset):
+class MolecularDataset(InMemoryDataset):
 
-    def __init__(self):
-        super(MolecularDataset, self).__init__()
+    def __init__(self,
+                 root,
+                 transform = None,
+                 pre_transform = None,
+                 pre_filter = None):
+        super(MolecularDataset, self).__init__(root, transform, pre_transform)
+        self.load(self.processed_paths[0]) # 2.5 version
 
-    def create(self, raw_path):
+    def raw_file_names(self):
+        return ['smiles_rb.csv']
+
+    @property
+    def processed_file_names(self):
+        return ['data.pt']
+    
+    def download(self):
+        pass 
+
+    def process(self):
         dataset = []
+        raw_path = os.path.join(self.raw_dir, 'smiles_rb.csv')
         self.data = pd.read_csv(raw_path).reset_index()
         for ix, mol in tqdm(self.data.iterrows(), total = self.data.shape[0]):
             mol_obj = Chem.MolFromSmiles(mol['SMILES'])
@@ -108,20 +126,27 @@ class MolecularDataset(Dataset):
             # Skip this molecule and continue to the next
                 continue
             x = self._get_node_features(mol_obj)
-            edge_index = self._get_adjacency(mol_obj)
-            edge_attr = self._get_edge_features(mol_obj)
+            edge_index , bool_dense = self._get_adjacency(mol_obj)
+            #edge_attr = self._get_edge_features(mol_obj)
+            fingerprint = self._get_fingerprint(mol_obj)
             label = self._get_label(mol['ReadyBiodegradability'])
             num_nodes = mol_obj.GetNumAtoms()
 
-            data = Data(x =x, 
-                    edge_index = edge_index,
-                    edge_attr = edge_attr,
-                    y=label,
-                    smiles=mol["SMILES"],
-                    num_nodes = num_nodes)
+            data = Data(
+            x = x,
+            edge_index = edge_index,
+            fingerprint = fingerprint,
+            y = label,
+            smiles = mol['SMILES'],
+            num_nodes = num_nodes)
             
             dataset.append(data)
-        torch.save(dataset, 'data/train.pt')
+            
+        processed_dir = os.path.join(self.root, 'processed')
+        if not os.path.exists(processed_dir):
+            os.makedirs(processed_dir)
+
+        self.save(dataset, self.processed_paths[0])
                        
     def _get_node_features(self, mol):
 
@@ -144,7 +169,7 @@ class MolecularDataset(Dataset):
         sparse_adj = torch.sparse_coo_tensor(edge_index, vals, (num_nodes, num_nodes))
         dense_adj = sparse_adj.to_dense()
         bool_dense = dense_adj > 0
-        return bool_dense
+        return edge_index, bool_dense
     
     def _get_edge_features(self, mol):
 
@@ -154,14 +179,26 @@ class MolecularDataset(Dataset):
         edge_feat = torch.tensor(features, dtype=torch.float)
 
         return edge_feat
+    
+    def _get_fingerprint(self, mol):
+
+        fingerprint = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+        fingerprint_tensor = torch.tensor(list(fingerprint), dtype=torch.float32)
+
+        return fingerprint_tensor
 
     def _get_label(self, label):
         return torch.asarray([label], dtype = int)
     
-    
-dataset = MolecularDataset()
-dataset.create('data/smiles_rb.csv')
-#dataset = torch.load('data/train.pt')
+dataset = MolecularDataset(root = 'data')
+dataset.load('data\processed\data.pt')
+print(dataset[0])
+#dataset.load()
+#print(dataset[0])
+#dataset.process()
+#dataset = torch.load('data/processed/data.pt')
+#print(slices)
+#print(dataset[200])
 #print(dataset[1].edge_index)
 # Only for creation of validation and test
 #df = pd.read_csv("data/smiles_rb.csv")
