@@ -13,11 +13,13 @@ class GraphAttention(nn.Module):
                  hidden_feats,
                  num_heads,
                  num_layers=1,
+                 activation = nn.LogSigmoid(),
                  drop_prob=0.5):
         super(GraphAttention, self).__init__()
         
         self.drop_prob = drop_prob
         self.num_heads = num_heads
+        self.activation = activation
         self.fc1 = nn.Linear(hidden_feats * num_heads, hidden_feats)
         self.fc2 = nn.Linear(hidden_feats, 1)
         self.attention_layers = nn.ModuleList([
@@ -34,6 +36,7 @@ class GraphAttention(nn.Module):
         for attention_layer in self.attention_layers:
             x = torch.cat([attention_layer(x, adj) for _ in range(self.num_heads)], dim = 1)
             #print(x.shape)
+        x = self.activation(x)
         x = F.dropout(x, self.drop_prob, training = self.training)
         #x = x.sum(dim=1) / x.shape[0]
         x = global_add_pool(x, batch)
