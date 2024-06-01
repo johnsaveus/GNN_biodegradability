@@ -93,6 +93,9 @@ class GraphAttentionLayer(nn.Module):
        # else:
        #     return h_out
 
+
+
+
 #dataset = MolecularDataset(root = 'data')
 #dataset.load('data\processed\data.pt')
 #gat_layer = GraphAttentionLayer(60, 40)

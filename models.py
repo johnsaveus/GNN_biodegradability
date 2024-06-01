@@ -53,7 +53,43 @@ class GraphAttention(nn.Module):
         #print(x.shape)
         x = x.squeeze(dim = -1)
         return x
+    
+class FPNN(nn.Module):
 
+    def __init__(self,
+                 fp_dim,
+                 fc1_dim,
+                 fc2_dim,
+                 activation = nn.ReLU(),
+                 drop_prob=0.5):
+        
+        super(FPNN, self).__init__()
+
+        self.dropout = nn.Dropout(drop_prob)
+        self.activation = activation
+        self.fc1 = nn.Linear(fp_dim, fc1_dim)
+        self.fc2 = nn.Linear(fc1_dim, fc2_dim)
+        self.fc3 = nn.Linear(fc2_dim, 1)
+
+    def forward(self, fingerprint):
+
+        out = self.fc1(fingerprint)
+        out = self.dropout(out)
+        out = self.activation(out)
+        out = self.fc2(out)
+        out = self.dropout(out)
+        out = self.activation(out)
+        out = self.fc3(out)
+        out = out.squeeze(dim = -1)
+
+        return out
+
+dataset = MolecularDataset(root = 'data')
+dataset.load('data\processed\data.pt')
+fp_size = dataset[0].fingerprint.shape[0]
+fp_network = FPNN(fp_size, 500, 250)
+output = fp_network(dataset[0].fingerprint)
+print(output)
 '''
 dataset = MolecularDataset(root = 'data')
 dataset.load('data\processed\data.pt')
