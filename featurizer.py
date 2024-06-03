@@ -5,6 +5,8 @@ import torch
 from tqdm import tqdm
 import os
 from rdkit.Chem import AllChem
+import pubchempy as pcp
+
 
 def one_of_k_encoding(x, allowable_set):
     if x not in allowable_set:
@@ -140,7 +142,7 @@ class MolecularDataset(InMemoryDataset):
             x = self._get_node_features(mol_obj)
             edge_index , _  = self._get_adjacency(mol_obj)
             #edge_attr = self._get_edge_features(mol_obj)
-            fingerprint = self._get_fingerprint(mol_obj)
+            fingerprint = self._get_mixed_fp(mol_obj)
             label = self._get_label(mol['ReadyBiodegradability'])
             num_nodes = mol_obj.GetNumAtoms()
 
@@ -192,6 +194,25 @@ class MolecularDataset(InMemoryDataset):
 
         return edge_feat
     
+    def _get_mixed_fp(self, mol):
+
+        fp_list = []
+        fp_pha = AllChem.GetErGFingerprint(mol,fuzzIncrement=0.3,maxPath=21,minPath=1)
+        fp_maccs = AllChem.GetMACCSKeysFingerprint(mol)
+        fp_pubchem = self._get_pubchem_fp(mol)
+        fp_list.extend(fp_pha)
+        fp_list.extend(fp_maccs)
+        fp_list.extend(fp_pubchem)
+
+        return torch.tensor(fp_list, dtype = torch.float32)
+    
+    def _get_pubchem_fp(self, mol):
+
+        smile = Chem.MolToSmiles(mol)
+        pubchem_compound = pcp.get_compounds(smile, 'smiles')[0]
+        feature = [int(bit) for bit in pubchem_compound.cactvs_fingerprint]
+        return feature
+
     def _get_fingerprint(self, mol):
 
         fingerprint = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=100)
@@ -201,9 +222,9 @@ class MolecularDataset(InMemoryDataset):
 
     def _get_label(self, label):
         return torch.asarray([label], dtype = int)
-    
+
 dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/train_ix.txt', save_name='train')
 dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/valid_ix.txt', save_name='valid')
 dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/test_ix.txt', save_name='test')
-dataset.load('data/processed/valid.pt')
+dataset.load('data/processed/train.pt')
 print(dataset[0])
