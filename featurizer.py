@@ -1,6 +1,5 @@
 from rdkit import Chem
 import pandas as pd
-#from torch.utils.data import Dataset
 from torch_geometric.data import Data, InMemoryDataset
 import torch
 from tqdm import tqdm
@@ -9,8 +8,7 @@ from rdkit.Chem import AllChem
 
 def one_of_k_encoding(x, allowable_set):
     if x not in allowable_set:
-        raise Exception("input {0} not in allowable set{1}:".format(
-            x, allowable_set))
+        raise Exception(f"input {x} not in allowable set{allowable_set}:")
     return [x == s for s in allowable_set]
 
 
@@ -100,10 +98,12 @@ class MolecularDataset(InMemoryDataset):
 
     def __init__(self,
                  root,
-                 transform = None,
-                 pre_transform = None,
-                 pre_filter = None):
-        super(MolecularDataset, self).__init__(root, transform, pre_transform)
+                 path_to_ind,
+                 save_name):
+        
+        self.path_to_ind = path_to_ind
+        self.save_name = save_name + '.pt'
+        super(MolecularDataset, self).__init__(root)
         self.load(self.processed_paths[0]) # 2.5 version
 
     def raw_file_names(self):
@@ -111,22 +111,34 @@ class MolecularDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['data.pt']
+        return [self.save_name]
     
     def download(self):
         pass 
 
+    def _read_txt_ind(self):
+
+        indices = []
+        with open(self.path_to_ind, 'r') as file:
+            for line in file:
+               indices.append(int(line.strip()))
+
+        return indices
+
     def process(self):
-        dataset = []
+
+        indices = self._read_txt_ind()
         raw_path = os.path.join(self.raw_dir, 'smiles_rb.csv')
-        self.data = pd.read_csv(raw_path).reset_index()
-        for ix, mol in tqdm(self.data.iterrows(), total = self.data.shape[0]):
+        all_data = pd.read_csv(raw_path).reset_index()
+        all_data = all_data.iloc[indices]
+        dataset = []
+        for ix, mol in tqdm(all_data.iterrows(), total = all_data.shape[0]):
             mol_obj = Chem.MolFromSmiles(mol['SMILES'])
             if mol_obj is None or mol_obj.GetNumAtoms() <= 1:
             # Skip this molecule and continue to the next
                 continue
             x = self._get_node_features(mol_obj)
-            edge_index , bool_dense = self._get_adjacency(mol_obj)
+            edge_index , _  = self._get_adjacency(mol_obj)
             #edge_attr = self._get_edge_features(mol_obj)
             fingerprint = self._get_fingerprint(mol_obj)
             label = self._get_label(mol['ReadyBiodegradability'])
@@ -134,7 +146,7 @@ class MolecularDataset(InMemoryDataset):
 
             data = Data(
             x = x,
-            edge_index = bool_dense,
+            edge_index = edge_index,
             fingerprint = fingerprint,
             y = label,
             smiles = mol['SMILES'],
@@ -169,7 +181,7 @@ class MolecularDataset(InMemoryDataset):
         sparse_adj = torch.sparse_coo_tensor(edge_index, vals, (num_nodes, num_nodes))
         dense_adj = sparse_adj.to_dense()
         bool_dense = dense_adj > 0
-        return edge_index, edge_index
+        return edge_index, bool_dense
     
     def _get_edge_features(self, mol):
 
@@ -190,23 +202,8 @@ class MolecularDataset(InMemoryDataset):
     def _get_label(self, label):
         return torch.asarray([label], dtype = int)
     
-#dataset = MolecularDataset(root = 'data')
-#dataset.load('data\processed\data.pt')
-#print(dataset[0])
-#dataset.load()
-#print(dataset[0])
-#dataset.process()
-#dataset = torch.load('data/processed/data.pt')
-#print(slices)
-#print(dataset[200])
-#print(dataset[1].edge_index)
-# Only for creation of validation and test
-#df = pd.read_csv("data/smiles_rb.csv")
-#smiles = df['SMILES']
-#y = df['ReadyBiodegradability']
-#print(len(df))
-
-'''
-dataset = MolecularDataset(smiles, y)
-print(len(dataset.data))
-print(dataset.data)'''
+dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/train_ix.txt', save_name='train')
+dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/valid_ix.txt', save_name='valid')
+dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/test_ix.txt', save_name='test')
+dataset.load('data/processed/valid.pt')
+print(dataset[0])
