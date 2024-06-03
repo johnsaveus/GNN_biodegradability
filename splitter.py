@@ -1,21 +1,19 @@
 from sklearn.model_selection import train_test_split
 import pandas as pd
 import warnings
+import os
 
-class Splitter():
+class Data_Splitter():
 
     def __init__(self,
                  path,
-                 train_ratio = 0.7,
-                 val_ratio = 0.15,
-                 include_chirality = False):
-        
+                 train_ratio = 0.80,
+                 val_ratio = 0.10):
         
         self.path = path
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio 
         self.test_ratio = 1 - train_ratio - val_ratio
-        self.inculde_chirality = include_chirality
 
         assert (train_ratio + val_ratio + self.test_ratio) == 1, 'Fractions should add to 1'
         self._read_csv()
@@ -28,89 +26,45 @@ class Splitter():
 
     def random_split(self):
 
-        smiles_train, smiles_val_test, y_train, y_val_test = train_test_split(self.smiles,
+        smiles_train, smiles_val_test, _ , y_val_test = train_test_split(self.smiles,
                                                                       self.y,
                                                                       test_size = self.val_ratio + self.test_ratio,
-                                                                      random_state=42)
+                                                                      random_state=42,
+                                                                      stratify=self.y)
+        train_ix = smiles_train.index
 
-        smiles_val, smiles_test, y_val, y_test = train_test_split(smiles_val_test,
+        smiles_val, smiles_test, _, _ = train_test_split(smiles_val_test,
                                                                   y_val_test,
                                                                   test_size=0.5,
-                                                                  random_state=42)
+                                                                  random_state=42,
+                                                                  stratify=y_val_test)
         
-        return {'Train': [smiles_train, y_train],
-                'Validation': [smiles_val, y_val],
-                'Test' : [smiles_test, y_test]}
-    
-    def _generate_single_scaffold(self,
-                                  smile):
-    
-        from rdkit import Chem
-        from rdkit.Chem.Scaffolds.MurckoScaffold import MurckoScaffoldSmiles
+        valid_ix = smiles_val.index
+        test_ix = smiles_test.index
 
-        warnings.simplefilter('ignore')
-        mol = Chem.MolFromSmiles(smile)
+        self._save_ix(train_ix, valid_ix, test_ix)
+        
+    def _save_ix(self, train_ix, valid_ix, test_ix):
+        
+        ix_path = 'data/split_ix'
+        if not os.path.exists(ix_path):
+            os.makedirs(ix_path)
 
-        scaffold = MurckoScaffoldSmiles(mol=mol, includeChirality= self.inculde_chirality)
-        return scaffold 
-    
-    def _generate_all_scaffolds(self):
+        train_ix_path = os.path.join(ix_path, 'train_ix.txt')
+        valid_ix_path = os.path.join(ix_path, 'valid_ix.txt')
+        test_ix_path =  os.path.join(ix_path, 'test_ix.txt')
 
-        scaffolds = {}
-        for ix, smile in enumerate(self.smiles):
-            scaffold = self. _generate_single_scaffold(smile)
-            if scaffold is not None:
-                if scaffold not in scaffolds:
-                    scaffolds[scaffold] = [ix]
-                else:
-                    scaffolds[scaffold].append(ix)
+        with open(train_ix_path, 'w') as file:
+            for ix in train_ix:
+                file.write(f"{ix}\n")
 
-        scaffolds = {key: sorted(value) for key, value in scaffolds.items()}
-        scaffold_sets = [
-            scaffold_set
-            for (scaffold,
-                 scaffold_set) in sorted(scaffolds.items(),
-                                         key=lambda x: (len(x[1]), x[1][0]),
-                                         reverse=True)
-        ]
-        return scaffold_sets
-    
-    def scaffold_split(self):
+        with open(valid_ix_path, 'w') as file:
+            for ix in valid_ix:
+                file.write(f"{ix}\n")
+        
+        with open(test_ix_path, 'w') as file:
+            for ix in test_ix:
+                file.write(f"{ix}\n")
 
-        scaffold_sets = self._generate_all_scaffolds()
-
-        train_cutoff = self.train_ratio * len(self.smiles)
-        valid_cutoff = (self.train_ratio + self.val_ratio) * len(self.smiles)
-        train_inds = []
-        val_inds = []
-        test_inds = []
-
-        for scaffold_set in scaffold_sets:
-            if len(train_inds) + len(scaffold_set) > train_cutoff:
-                if len(train_inds) + len(val_inds) + len(
-                        scaffold_set) > valid_cutoff:
-                    test_inds += scaffold_set
-                else:
-                    val_inds += scaffold_set
-            else:
-                train_inds += scaffold_set
-
-        smiles_train, y_train = self.smiles[train_inds], self.y[train_inds]
-        smiles_val, y_val = self.smiles[val_inds], self.y[val_inds]
-        smiles_test, y_test = self.smiles[test_inds], self.y[test_inds]
-    
-        return {'Train': [smiles_train, y_train],
-                'Validation': [smiles_val, y_val],
-                'Test' : [smiles_test, y_test]}
-
-
-splitter = Splitter(path = 'data/raw/smiles_rb.csv')
-random = splitter.random_split()
-scaf = splitter.scaffold_split()
-print(len(scaf['Train'][0]))
-print(len(scaf['Validation'][0]))
-print(len(scaf['Test'][0]))
-
-print(len(random['Train'][0]))
-print(len(random['Validation'][0]))
-print(len(random['Test'][0]))
+splitter = Data_Splitter(path = 'data/raw/smiles_rb.csv')
+rand = splitter.random_split()
