@@ -25,46 +25,10 @@ def atom_features(atom):
         atom_feats = torch.tensor(one_of_k_encoding_unk(
        atom.GetSymbol(),
        [
-        'Rh',
-        'Li',
-        'Pd', 
-        'V', 
-        'B', 
-        'Na',
-        'S', 
-        'Cl', 
-        'Cu', 
-        'Bi',
-        'Mg',
-        'Zr', 
-        'P', 
-        'I', 
-        'K', 
-        'C', 
-        'Ca', 
-        'Fe',
-        'Mn', 
-        'Cr',
-        'N', 
-        'La', 
-        'Ba', 
-        'Al',
-        'F', 
-        'Sn',
-        'Hg', 
-        'Br', 
-        'Cs',
-        'H',
-        'Nd',
-        'Ti', 
-        'Ni', 
-        'Co',
-        'Sr',
-        'O',
-        'Ce', 
-        'Y', 
-        'Zn', 
-        'Si', 
+        'Ti', 'B', 'Ca', 'Cr', 'Mo', 'I', 'Ba', 'Cl', 'Zn', 'Mg', 
+        'P', 'Co', 'F', 'Ni', 'H', 'Pd', 'Al', 'Rh', 'Li', 'Mn', 'K',
+        'Br', 'Ce', 'Cu', 'Sn', 'N', 'Y', 'Hg', 'Fe', 'C', 'V', 'Cs', 
+        'Pb', 'Bi', 'Nd', 'Zr', 'O', 'Na', 'S', 'Sr', 'Tl', 'Si', 'La',
         'other'
         ])  + one_of_k_encoding_unk(atom.GetHybridization(), 
                 [
@@ -73,15 +37,15 @@ def atom_features(atom):
                 Chem.rdchem.HybridizationType.SP2,
                 Chem.rdchem.HybridizationType.SP3, 
                 Chem.rdchem.HybridizationType.SP3D, 
-                Chem.rdchem.HybridizationType.SP3D2,
-                'other'
+                Chem.rdchem.HybridizationType.SP3D2
                 ]) + one_of_k_encoding(atom.GetTotalNumHs(),
                                            [0, 1, 2, 3, 4]) + \
                     one_of_k_encoding_unk(atom.GetDegree(), 
-                                      [0, 1, 2, 3, 4]) + \
+                                      [0, 1, 2, 3, 4, 5, 6]) + \
                     [atom.GetFormalCharge()] + \
+                    one_of_k_encoding_unk(atom.GetNumRadicalElectrons(),
+                                      [0, 1, 2, 4]) + \
                     [atom.GetIsAromatic()])
-        
         return atom_feats
     
 def bond_features(bond):
@@ -197,12 +161,12 @@ class MolecularDataset(InMemoryDataset):
     def _get_mixed_fp(self, mol):
 
         fp_list = []
-        fp_pha = AllChem.GetErGFingerprint(mol,fuzzIncrement=0.3,maxPath=21,minPath=1)
+        #fp_pha = AllChem.GetErGFingerprint(mol,fuzzIncrement=0.3,maxPath=21,minPath=1)
         fp_maccs = AllChem.GetMACCSKeysFingerprint(mol)
-        fp_pubchem = self._get_pubchem_fp(mol)
-        fp_list.extend(fp_pha)
+        #fp_pubchem = self._get_pubchem_fp(mol)
+        #fp_list.extend(fp_pha)
         fp_list.extend(fp_maccs)
-        fp_list.extend(fp_pubchem)
+        #fp_list.extend(fp_pubchem)
 
         return torch.tensor(fp_list, dtype = torch.float32)
     
@@ -223,8 +187,14 @@ class MolecularDataset(InMemoryDataset):
     def _get_label(self, label):
         return torch.asarray([label], dtype = int)
 
+
 dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/train_ix.txt', save_name='train')
 dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/valid_ix.txt', save_name='valid')
 dataset = MolecularDataset(root = 'data', path_to_ind='data/split_ix/test_ix.txt', save_name='test')
 dataset.load('data/processed/train.pt')
+
+delete_paths = ['data/processed/pre_filter.pt', 'data/processed/pre_transform.pt']
+for path in delete_paths:
+    if os.path.exists(path):
+        os.remove(path)
 print(dataset[0])
