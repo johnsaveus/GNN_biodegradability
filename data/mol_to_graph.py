@@ -6,6 +6,10 @@ from tqdm import tqdm
 import os
 from rdkit.Chem import AllChem
 import pubchempy as pcp
+from rdkit import RDLogger
+
+# Disable Hydrogen warnings
+RDLogger.DisableLog('rdApp.*')  
 
 def one_of_k_encoding(x, allowable_set):
     if x not in allowable_set:
@@ -43,7 +47,7 @@ def atom_features(atom):
                     [atom.GetFormalCharge()] + \
                     one_of_k_encoding(atom.GetNumRadicalElectrons(),
                                       [0, 1, 2, 3, 4]) + \
-                    [atom.GetIsAromatic()])
+                    [atom.GetIsAromatic()], dtype = torch.float32)
         return atom_feats
     
 def bond_features(bond):
@@ -100,6 +104,7 @@ class MolecularDataset(InMemoryDataset):
         sdf_data = sdf_data.iloc[indices_sdf]
         all_data = pd.concat([csv_data, sdf_data], axis = 0)
         dataset = []
+        print(f"Creating {self.save_name} dataset")
         for _ , mol in tqdm(all_data.iterrows(), total = all_data.shape[0]):
             mol_obj = Chem.MolFromSmiles(mol['SMILES'])
             if mol_obj is None or mol_obj.GetNumAtoms() <= 1:
@@ -132,7 +137,7 @@ class MolecularDataset(InMemoryDataset):
 
         node_feat = torch.stack(
         [atom_features(atom) for atom in mol.GetAtoms()])
-        node_feats = torch.tensor(node_feat, dtype = torch.float32)
+        node_feats = node_feat.clone().detach()
         return node_feats
     
     def _get_adjacency(self, mol):
