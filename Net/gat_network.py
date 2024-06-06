@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from Net.gat_layer import GraphAttentionLayer
 from torch_geometric.nn.pool import global_add_pool
-from data.mol_to_graph import MolecularDataset
 
 torch.manual_seed(42)
 class GraphAttention(nn.Module):

@@ -1,35 +1,36 @@
-from torch.nn import BCELoss, BCEWithLogitsLoss
+from torch.nn import BCEWithLogitsLoss
 from torch.optim import Adam
-from models import GraphAttention, FPNN
+from Net.gat_network import GraphAttention
 import torch
 from torch_geometric.loader import DataLoader
-from sklearn.metrics import confusion_matrix
-from featurizer import MolecularDataset
-from torch_geometric.nn.models import GAT
-import torch
-import torch.nn.functional as F
-from torch_geometric.nn import GATConv
-from torch_geometric.loader import DataLoader
-from torch_geometric.nn import global_add_pool
+from data.mol_to_graph import MolecularDataset
+
+dataset_train = MolecularDataset(root = 'data', 
+                            path_to_ind_csv = 'split_ix/csv_train_ix.txt',
+                            path_to_ind_sdf = 'split_ix/sdf_train_ix.txt',
+                                save_name='train')
+dataset_valid = MolecularDataset(root = 'data', 
+                            path_to_ind_csv = 'split_ix/csv_valid_ix.txt',
+                            path_to_ind_sdf = 'split_ix/sdf_valid_ix.txt',
+                                save_name='valid')
+dataset_test = MolecularDataset(root = 'data', 
+                            path_to_ind_csv = 'split_ix/csv_test_ix.txt',
+                            path_to_ind_sdf = 'split_ix/sdf_test_ix.txt',
+                                save_name='test')
+dataset_train.load("data/processed/train.pt")
+dataset_valid.load("data/processed/valid.pt")
+dataset_test.load("data/processed/test.pt")
+
 
 loss_fn  = BCEWithLogitsLoss()
 epochs = 50
+train_batches = len(dataset_train) // 32
+valid_batches = len(dataset_valid) // 32
 
-dataset_train = MolecularDataset(root = 'data', path_to_ind='data/split_ix/train_ix.txt', save_name='train')
-dataset_valid = MolecularDataset(root = 'data', path_to_ind='data/split_ix/valid_ix.txt', save_name='valid')
-dataset_test = MolecularDataset(root = 'data', path_to_ind='data/split_ix/test_ix.txt', save_name='test')
-dataset_train.load('data/processed/train.pt')
-dataset_valid.load('data/processed/valid.pt')
-dataset_test.load('data/processed/test.pt')
+train_loader = DataLoader(dataset=dataset_train, batch_size=32, shuffle=True)
+validation_loader = DataLoader(dataset=dataset_valid, batch_size=32, shuffle=False)
 
-print(dataset_train[0])
-train_batches = len(dataset_train) / 64
-valid_batches = len(dataset_valid) / 64
-
-train_loader = DataLoader(dataset=dataset_train, batch_size=64, shuffle=True)
-validation_loader = DataLoader(dataset=dataset_valid, batch_size=64, shuffle=False)
-
-model = GraphAttention(60, 30, 4)
+model = GraphAttention(68, 30, 4)
 optimizer = Adam(params = model.parameters(), lr = 0.001)
 
 for epoch in range(epochs):
