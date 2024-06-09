@@ -8,7 +8,6 @@ from data.mol_to_graph import MolecularDataset
 from sklearn.metrics import  roc_auc_score
 import argparse
 import os
-import torch.nn as nn
 import matplotlib.pyplot as plt
 
 def create_fold(path):
@@ -35,8 +34,8 @@ def train_one_epoch(model, train_loader, optimizer, device, base_weight):
         loss.backward()
         optimizer.step()
         y_probs = torch.sigmoid(y_pred)
-        labels.extend(y_true)
-        preds.extend((y_probs > 0.5).int())
+        labels.extend(y_true.cpu())
+        preds.extend((y_probs > 0.5).int().cpu())
     roc = roc_auc_score(labels, preds)
     return train_loss, roc
 
@@ -59,15 +58,16 @@ def validate_one_epoch(model, validation_loader, device, base_weight):
         test_loss+=loss.item()
         # data.y is int. Need to be casted to float
         y_probs = torch.sigmoid(y_pred)
-        labels.extend(y_true)
-        preds.extend((y_probs > 0.5).int())
+        labels.extend(y_true.cpu())
+        preds.extend((y_probs > 0.5).int().cpu())
     roc = roc_auc_score(labels, preds)
     return test_loss, roc
 
 def main(args):
     
-    epochs = 10
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    torch.manual_seed(42)
+    epochs = args.epochs
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       
     train_dataset = MolecularDataset(root = 'data', 
                             path_to_ind_csv = 'split_ix/csv_train_ix.txt',
                             path_to_ind_sdf = 'split_ix/sdf_train_ix.txt',
@@ -96,7 +96,7 @@ def main(args):
                            ).to(device)
     optimizer = AdamW(params = model.parameters(),
                       lr = args.learning_rate,
-                      weight_decay = 1e-3)
+                      weight_decay = 0.001)
     train_losses = []
     train_rocs = []
     valid_losses = []
@@ -116,7 +116,7 @@ def main(args):
                                                  base_weight = base_weight)
         train_losses.append(train_loss / train_batches)
         valid_losses.append(valid_loss / valid_batches)
-        train_rocs.append(train_roc)
+        train_rocs.append(train_roc)    
         valid_rocs.append(valid_roc)
         if valid_losses[-1] < best_valid_loss:
             best_epoch = epoch
@@ -166,12 +166,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description = 'Training and evaluating GNN model')
 
+    parser.add_argument('--epochs', type = int, default = 100, help = "Number of epochs")
     parser.add_argument('--batch-size', type = int, default = 32, help = "Batch size for train and validation loaders")
     parser.add_argument('--hidden', type = int, default = 2, help = "Hidden neuron size for GAT")
     parser.add_argument('--num_heads', type = int, default = 2, help = "Number of attention heads")
     parser.add_argument('--num_layers', type = int, default = 2, help = "Number of Hidden GAT layers")
     parser.add_argument('--activation', type = str, default = 'relu', help = "Activation function for non-linearity")
-    parser.add_argument('--drop_prob', type = int, default = 0.1, help = "Dropout probability")
+    parser.add_argument('--drop_prob', type = float, default = 0.1, help = "Dropout probability")
     parser.add_argument('--learning-rate', type = float, default = 0.01, help = "Learning rate")
     parser.add_argument('--model-name', type = str, required = True , help = "Give a name to save")
 

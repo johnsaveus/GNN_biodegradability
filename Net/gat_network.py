@@ -22,6 +22,8 @@ class GraphAttention(nn.Module):
             self.activation = nn.PReLU()
         elif activation == 'elu':
             self.activation = nn.ELU()
+        elif activation == 'gelu':
+            self.activation = nn.GELU()
         self.fc1 = nn.Linear(hidden_feats, 1)
         self.attention_layers = nn.ModuleList([
             GraphAttentionLayer(atom_feats if i == 0 else hidden_feats * num_heads, 
