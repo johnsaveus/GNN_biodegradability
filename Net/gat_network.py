@@ -36,7 +36,7 @@ class GraphAttention(nn.Module):
         #print(x.shape)
         x = F.dropout(x, self.drop_prob, training = self.training)
         #print(x.shape)
-        for i, attention_layer in self.attention_layers:
+        for i, attention_layer in enumerate(self.attention_layers):
             if i == len(self.attention_layers) - 1:
                 x = torch.stack([attention_layer(x, adj) for _ in range(self.num_heads)], dim = 0).mean(dim=0)
             else:

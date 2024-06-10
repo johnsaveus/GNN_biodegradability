@@ -5,3 +5,4 @@ torch==2.3.0 #Version doesnt matter because i run everything online
 torch-geometric==2.5.3
 tqdm==4.66.4
 PubChemPy==1.0.4
+seaborn
