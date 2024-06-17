@@ -39,8 +39,6 @@ with torch.no_grad():
         preds.append((y_sigm > 0.5).int().cpu())
         targets.append(data.y.int())
 print(roc_auc_score(targets, preds))
-#print(preds)
-#print(targets)
 class_names = ['NRB', 'RB']
 conf = confusion_matrix(targets, preds)
 # Plot confusion matrix

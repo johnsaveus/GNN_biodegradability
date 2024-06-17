@@ -28,14 +28,13 @@ class GraphAttention(nn.Module):
         self.attention_layers = nn.ModuleList([
             GraphAttentionLayer(atom_feats if i == 0 else hidden_feats * num_heads, 
                                 hidden_feats, 
-                                drop_prob=drop_prob) 
+                                drop_prob=drop_prob,
+                                init_distrib = 'uniform') 
             for i in range(num_layers)
         ])
 
     def forward(self, x, adj, batch):
-        #print(x.shape)
         x = F.dropout(x, self.drop_prob, training = self.training)
-        #print(x.shape)
         for i, attention_layer in enumerate(self.attention_layers):
             if i == len(self.attention_layers) - 1:
                 x = torch.stack([attention_layer(x, adj) for _ in range(self.num_heads)], dim = 0).mean(dim=0)
@@ -43,10 +42,7 @@ class GraphAttention(nn.Module):
                 x = torch.cat([attention_layer(x, adj) for _ in range(self.num_heads)], dim=1)
                 x = self.activation(x)
                 x = F.dropout(x, self.drop_prob, training = self.training)
-            #print(x.shape)
         x = global_mean_pool(x, batch)
-        #print(x.shape)
         x = self.fc1(x)
-        #print(x.shape)
         x = x.squeeze(dim = -1)
         return x

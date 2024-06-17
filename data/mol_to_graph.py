@@ -5,7 +5,6 @@ import torch
 from tqdm import tqdm
 import os
 from rdkit.Chem import AllChem
-import pubchempy as pcp
 from rdkit import RDLogger
 
 # Disable Hydrogen warnings
@@ -64,11 +63,21 @@ def bond_features(bond):
 
 class MolecularDataset(InMemoryDataset):
 
+    '''Creates Molecular Datasets that will be used for training-inference
+       
+       Args:
+            root (str): The path to the directory of the data folder (that contains raw, proccessed)
+            path_to_ind_csv (str): Path to csv indexes saved for the specific dataset (train, val, test)
+            path_to_ind_sdf (str): Path to sdf indexes saved for the specific dataset (train, val, test)
+            save_name (str): Name of the dataset
+
+        If the dataset is already created, it can be accessed with dataset.load(saved_path)
+    '''
     def __init__(self,
-                 root,
-                 path_to_ind_csv,
-                 path_to_ind_sdf,
-                 save_name):
+                 root : str,
+                 path_to_ind_csv : str,
+                 path_to_ind_sdf : str,
+                 save_name : str):
         
         self.path_to_ind_csv = path_to_ind_csv
         self.path_to_ind_sdf = path_to_ind_sdf
@@ -111,15 +120,17 @@ class MolecularDataset(InMemoryDataset):
             # Skip this molecule and continue to the next
                 continue
             x = self._get_node_features(mol_obj)
-            edge_index , _  = self._get_adjacency(mol_obj)
-            #edge_attr = self._get_edge_features(mol_obj)
-            fingerprint = self._get_mixed_fp(mol_obj)
+            edge_index  = self._get_adjacency(mol_obj)
+            edge_attr = self._get_edge_features(mol_obj)
+            fingerprint = self._get_maccs_fp(mol_obj)
+            fingerprint = fingerprint.unsqueeze(dim=0)
             label = self._get_label(mol['ReadyBiodegradability'])
             num_nodes = mol_obj.GetNumAtoms()
 
             data = Data(
             x = x,
             edge_index = edge_index,
+            edge_attr = edge_attr,
             fingerprint = fingerprint,
             y = label,
             smiles = mol['SMILES'],
@@ -130,71 +141,37 @@ class MolecularDataset(InMemoryDataset):
         processed_dir = os.path.join(self.root, 'processed')
         if not os.path.exists(processed_dir):
             os.makedirs(processed_dir)
-
         self.save(dataset, self.processed_paths[0])
                        
     def _get_node_features(self, mol):
-
         node_feat = torch.stack(
         [atom_features(atom) for atom in mol.GetAtoms()])
         node_feats = node_feat.clone().detach()
         return node_feats
     
     def _get_adjacency(self, mol):
-        
         src , dest = [] , []
         for bond in mol.GetBonds():
             start, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
             src += [start, end]
             dest += [end, start]
         edge_index = torch.asarray([src, dest], dtype = torch.int) # Needs to be in COO Format
-        # Convert to dense
-        num_nodes = mol.GetNumAtoms()
-        vals = torch.ones(edge_index.shape[1], dtype = torch.float32)
-        sparse_adj = torch.sparse_coo_tensor(edge_index, vals, (num_nodes, num_nodes))
-        dense_adj = sparse_adj.to_dense()
-        bool_dense = dense_adj > 0
-        return edge_index, bool_dense
+        return edge_index 
     
     def _get_edge_features(self, mol):
-
         features = []
         for bond in mol.GetBonds():
             features += 2 * [bond_features(bond)]
         edge_feat = torch.tensor(features, dtype=torch.float)
-
         return edge_feat
     
-    def _get_mixed_fp(self, mol):
-
-        fp_list = []
-        #fp_pha = AllChem.GetErGFingerprint(mol,fuzzIncrement=0.3,maxPath=21,minPath=1)
-        fp_maccs = AllChem.GetMACCSKeysFingerprint(mol)
-        #fp_pubchem = self._get_pubchem_fp(mol)
-        #fp_list.extend(fp_pha)
-        fp_list.extend(fp_maccs)
-        #fp_list.extend(fp_pubchem)
-
-        return torch.tensor(fp_list, dtype = torch.float32)
+    def _get_maccs_fp(self, mol):
+        fp_maccs = list(AllChem.GetMACCSKeysFingerprint(mol))
+        return torch.tensor(fp_maccs, dtype = torch.float32)
     
-    def _get_pubchem_fp(self, mol):
-
-        smile = Chem.MolToSmiles(mol)
-        pubchem_compound = pcp.get_compounds(smile, 'smiles')[0]
-        feature = [int(bit) for bit in pubchem_compound.cactvs_fingerprint]
-        return feature
-
-    def _get_fingerprint(self, mol):
-
-        fingerprint = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=100)
-        fingerprint_tensor = torch.tensor(list(fingerprint), dtype=torch.float32)
-
-        return fingerprint_tensor
-
     def _get_label(self, label):
         return torch.asarray([label], dtype = int)
-
-
+    
 if __name__ == '__main__':
     dataset = MolecularDataset(root = '', 
                             path_to_ind_csv = 'split_ix/csv_train_ix.txt',
@@ -208,7 +185,6 @@ if __name__ == '__main__':
                             path_to_ind_csv = 'split_ix/csv_test_ix.txt',
                             path_to_ind_sdf = 'split_ix/sdf_test_ix.txt',
                                 save_name='test')
-    
     delete_paths = ['processed/pre_filter.pt', 'processed/pre_transform.pt']
     for path in delete_paths:
         if os.path.exists(path):

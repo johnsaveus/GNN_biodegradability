@@ -1,16 +1,23 @@
 from sklearn.model_selection import train_test_split
 import pandas as pd
-import warnings
 import os
 from rdkit import Chem
 
 class Data_Splitter():
 
+    ''' Merge the 2 biodegradability datasets and split them stratified into train-val-test and saves their Ix
+        Args:
+            path_to_sdf (str): Path to Sdf file (1st dataset)
+            path_to_csv (str): Path to Csv file (2nd dataset)
+            train_ratio (float, optional) : Train fraction (default = 0.8)
+            val_ratio (float, optional) : Validation fraction (default = 0.1)
+    '''
+    
     def __init__(self,
-                 path_to_sdf,
-                 path_to_csv,
-                 train_ratio = 0.80,
-                 val_ratio = 0.10):
+                 path_to_sdf : str,
+                 path_to_csv : str,
+                 train_ratio : float = 0.80,
+                 val_ratio : float = 0.10):
         self.path_to_sdf = path_to_sdf
         self.path_to_csv = path_to_csv
         self.train_ratio = train_ratio

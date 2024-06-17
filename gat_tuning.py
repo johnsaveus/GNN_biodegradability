@@ -56,7 +56,6 @@ def validate_one_epoch(model, validation_loader, device, base_weight):
             loss_fn = BCEWithLogitsLoss(weight = weight)
             loss = loss_fn(y_pred.to(device), y_true.float())
         test_loss+=loss.item()
-        # data.y is int. Need to be casted to float
         y_probs = torch.sigmoid(y_pred)
         labels.extend(y_true.cpu())
         preds.extend((y_probs > 0.5).int().cpu())
