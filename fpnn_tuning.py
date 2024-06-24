@@ -9,9 +9,10 @@ import json
 import argparse
 import os
 from torch.nn import BCEWithLogitsLoss
-from sklearn.metrics import  roc_auc_score
+from sklearn.metrics import  balanced_accuracy_score
+from torch.optim.lr_scheduler import ExponentialLR, StepLR
 
-def train_one_epoch(model, train_loader, optimizer, device, base_weight):
+def train_one_epoch(model, train_loader, optimizer, device, base_weight, scheduler):
     model.train()
     train_loss = 0
     labels = []
@@ -34,8 +35,9 @@ def train_one_epoch(model, train_loader, optimizer, device, base_weight):
         y_probs = torch.sigmoid(y_pred)
         labels.extend(y_true.cpu())
         preds.extend((y_probs > 0.5).int().cpu())
-    roc = roc_auc_score(labels, preds)
-    return train_loss, roc
+    scheduler.step()
+    ba = balanced_accuracy_score(labels, preds)
+    return train_loss, ba
 
 def validate_one_epoch(model, validation_loader, device, base_weight):
     model.eval()
@@ -58,8 +60,8 @@ def validate_one_epoch(model, validation_loader, device, base_weight):
         y_probs = torch.sigmoid(y_pred)
         labels.extend(y_true.cpu())
         preds.extend((y_probs > 0.5).int().cpu())
-    roc = roc_auc_score(labels, preds)
-    return test_loss, roc
+    ba = balanced_accuracy_score(labels, preds)
+    return test_loss, ba
 
 def main(args):
     
@@ -89,11 +91,11 @@ def main(args):
                    args.num_heads,
                    args.num_layers,
                    args.activation,
-                   args.drop_gat,
-                   args.drop_fp)
+                   args.dropout).to(device)
     optimizer = AdamW(params = model.parameters(),
                       lr = args.learning_rate,
                       weight_decay = 0.001)
+    scheduler = StepLR(optimizer = optimizer, step_size = 20, gamma = 0.85)
     train_losses = []
     train_rocs = []
     valid_losses = []
@@ -106,7 +108,8 @@ def main(args):
                                                 train_loader = train_loader,
                                                 optimizer = optimizer,
                                                 device = device,
-                                                base_weight = base_weight)
+                                                base_weight = base_weight,
+                                                scheduler = scheduler)
         valid_loss, valid_roc = validate_one_epoch(model = model,
                                                  validation_loader = valid_loader,
                                                  device = device,
@@ -169,8 +172,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_heads', type = int, default = 2, help = "Number of attention heads")
     parser.add_argument('--num_layers', type = int, default = 2, help = "Number of Hidden GAT layers")
     parser.add_argument('--activation', type = str, default = 'relu', help = "Activation function for non-linearity")
-    parser.add_argument('--drop_gat', type = float, default = 0.1, help = "Dropout probability")
-    parser.add_argument('--drop_fp', type = float, default = 0.1, help = "Dropout probability")
+    parser.add_argument('--dropout', type = float, default = 0.1, help = "Dropout probability")
     parser.add_argument('--learning-rate', type = float, default = 0.01, help = "Learning rate")
     parser.add_argument('--model-name', type = str, required = True , help = "Give a name to save")
 

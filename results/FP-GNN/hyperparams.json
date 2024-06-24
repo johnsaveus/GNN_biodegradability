@@ -1,0 +1,16 @@
+{
+    "epochs": 200,
+    "batch_size": 32,
+    "hidden": 32,
+    "num_heads": 4,
+    "num_layers": 3,
+    "activation": "elu",
+    "dropout": 0.1,
+    "learning_rate": 0.0005,
+    "model_name": "Best_fpnn",
+    "Best epoch": 156,
+    "Best train loss": 0.409,
+    "Best valid loss": 0.438,
+    "Best train roc": 0.829,
+    "Best valid roc": 0.848
+}

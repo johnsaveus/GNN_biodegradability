@@ -1,0 +1,16 @@
+{
+    "epochs": 200,
+    "batch_size": 32,
+    "hidden": 32,
+    "num_heads": 4,
+    "num_layers": 4,
+    "activation": "elu",
+    "drop_prob": 0.1,
+    "learning_rate": 0.0002,
+    "model_name": "Best_gat",
+    "Best epoch": 155,
+    "Best train loss": 0.483,
+    "Best valid loss": 0.481,
+    "Best train ac": 0.778,
+    "Best valid ac": 0.803
+}

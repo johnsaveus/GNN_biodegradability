@@ -42,7 +42,10 @@ class GraphAttention(nn.Module):
                 x = torch.cat([attention_layer(x, adj) for _ in range(self.num_heads)], dim=1)
                 x = self.activation(x)
                 x = F.dropout(x, self.drop_prob, training = self.training)
+        x = self.activation(x)
         x = global_mean_pool(x, batch)
         x = self.fc1(x)
+        x = self.activation(x)
+        x = F.dropout(x, self.drop_prob, training = self.training)
         x = x.squeeze(dim = -1)
         return x

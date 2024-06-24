@@ -1,0 +1,3 @@
+Best Logistic Regression Parameters:
+C: 1
+kernel: rbf

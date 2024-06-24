@@ -5,16 +5,19 @@ import torch
 import json
 from torch_geometric.loader import DataLoader
 from data.mol_to_graph import MolecularDataset
-from sklearn.metrics import  roc_auc_score
+from sklearn.metrics import balanced_accuracy_score
 import argparse
 import os
 import matplotlib.pyplot as plt
+from torch.optim.lr_scheduler import ExponentialLR, StepLR
+import numpy as np
+import random
 
 def create_fold(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def train_one_epoch(model, train_loader, optimizer, device, base_weight):
+def train_one_epoch(model, train_loader, optimizer, device, base_weight, scheduler):
     model.train()
     train_loss = 0
     labels = []
@@ -28,7 +31,7 @@ def train_one_epoch(model, train_loader, optimizer, device, base_weight):
         y_pred = model(x, edge_index, batch)
         weight = base_weight[y_true.long()]
         # data.y is int. Need to be casted to float
-        loss_fn = BCEWithLogitsLoss(weight = weight)
+        loss_fn = BCEWithLogitsLoss()
         loss = loss_fn(y_pred.to(device), y_true.float())
         train_loss+=loss.item()
         loss.backward()
@@ -36,8 +39,9 @@ def train_one_epoch(model, train_loader, optimizer, device, base_weight):
         y_probs = torch.sigmoid(y_pred)
         labels.extend(y_true.cpu())
         preds.extend((y_probs > 0.5).int().cpu())
-    roc = roc_auc_score(labels, preds)
-    return train_loss, roc
+    scheduler.step()
+    ba = balanced_accuracy_score(labels, preds)
+    return train_loss, ba
 
 def validate_one_epoch(model, validation_loader, device, base_weight):
     model.eval()
@@ -53,18 +57,19 @@ def validate_one_epoch(model, validation_loader, device, base_weight):
             y_pred = model(x, edge_index, batch)
             weight = base_weight[y_true.long()]
             # data.y is int. Need to be casted to float
-            loss_fn = BCEWithLogitsLoss(weight = weight)
+            loss_fn = BCEWithLogitsLoss()
             loss = loss_fn(y_pred.to(device), y_true.float())
         test_loss+=loss.item()
         y_probs = torch.sigmoid(y_pred)
         labels.extend(y_true.cpu())
         preds.extend((y_probs > 0.5).int().cpu())
-    roc = roc_auc_score(labels, preds)
-    return test_loss, roc
+    ba = balanced_accuracy_score(labels, preds)
+    return test_loss, ba
 
 def main(args):
     
     torch.manual_seed(42)
+    np.random.seed(42)
     epochs = args.epochs
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')       
     train_dataset = MolecularDataset(root = 'data', 
@@ -96,6 +101,7 @@ def main(args):
     optimizer = AdamW(params = model.parameters(),
                       lr = args.learning_rate,
                       weight_decay = 0.001)
+    scheduler = StepLR(optimizer = optimizer, step_size = 20, gamma = 0.85)
     train_losses = []
     train_rocs = []
     valid_losses = []
@@ -108,7 +114,8 @@ def main(args):
                                                 train_loader = train_loader,
                                                 optimizer = optimizer,
                                                 device = device,
-                                                base_weight = base_weight)
+                                                base_weight = base_weight,
+                                                scheduler = scheduler)
         valid_loss, valid_roc = validate_one_epoch(model = model,
                                                  validation_loader = valid_loader,
                                                  device = device,
@@ -132,8 +139,8 @@ def main(args):
     args_dict['Best epoch'] = best_epoch
     args_dict['Best train loss'] = round(best_train_loss, 3)
     args_dict['Best valid loss'] = round(best_valid_loss, 3)
-    args_dict['Best train roc'] = round(best_train_roc, 3)
-    args_dict['Best valid roc'] = round(best_valid_roc, 3)
+    args_dict['Best train ac'] = round(best_train_roc, 3)
+    args_dict['Best valid ac'] = round(best_valid_roc, 3)
     args_file = os.path.join(save_path, 'hyperparams.json')
     with open(args_file, 'w') as f:
         json.dump(args_dict, f, indent = 4)
